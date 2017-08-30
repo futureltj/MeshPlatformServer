@@ -1,0 +1,71 @@
+Userid:   guest
+Password: 9zg8F7VD
+
+CREATE OR REPLACE FUNCTION public.first_agg ( anyelement, anyelement )
+RETURNS anyelement LANGUAGE SQL IMMUTABLE STRICT AS $$
+        SELECT $1;
+$$;
+ 
+-- And then wrap an aggregate around it
+CREATE AGGREGATE public.FIRST (
+        sfunc    = public.first_agg,
+        basetype = anyelement,
+        stype    = anyelement
+);
+ 
+-- Create a function that always returns the last non-NULL item
+CREATE OR REPLACE FUNCTION public.last_agg ( anyelement, anyelement )
+RETURNS anyelement LANGUAGE SQL IMMUTABLE STRICT AS $$
+        SELECT $2;
+$$;
+ 
+-- And then wrap an aggregate around it
+CREATE AGGREGATE public.LAST (
+        sfunc    = public.last_agg,
+        basetype = anyelement,
+        stype    = anyelement
+);
+
+
+drop CONTINUOUS VIEW v_1min;
+drop CONTINUOUS VIEW v_5min;
+drop stream tickdatastream;
+create stream tickdatastream(t timestamp,v numeric);
+
+CREATE CONTINUOUS VIEW v_1min WITH (ttl = '1 day', ttl_column = 'minute') AS
+  SELECT minute(t), first(v),last(v),min(v),max(v),avg(v) FROM tickdatastream GROUP BY minute ;  
+select t.*,t.minute at time zone 'UTC-8'  from v_1min t order by minute desc;
+
+
+select extract('hour' from t2), extract('minute' from t2)::int / 5 from (select t.minute at time zone 'UTC-8' as t2  from v_1min t order by minute desc) r;
+
+
+CREATE CONTINUOUS VIEW sensor_temps WITH (sw = '5 minutes',ttl = '1 day', ttl_column = 'minute') AS
+   SELECT first(to_datet) at time zone 'UTC-8' first(v),last(v),min(v),max(v),avg(v) FROM sensor_stream
+   
+   
+   
+   create stream futuretickstream(tradingday character varying,updatetime character varying,nstrumentid character varying,lastprice numeric,askvolume1 numeric,bidvolume1 numeric,volume numeric);
+   CREATE CONTINUOUS VIEW future_1min AS
+  SELECT t.tradingday||' '||substring(t.updatetime,0,7)||'00' t, first(lastprice),last(lastprice),min(lastprice),max(lastprice) FROM futuretickstream t GROUP BY t ;  
+
+  
+  SELECT status, content_type, content FROM http_get('http://123.57.158.202:7777');
+  
+
+##################TRANSFORM####################  
+  CREATE TABLE t (user text, value int);
+
+CREATE OR REPLACE FUNCTION insert_into_t()
+  RETURNS trigger AS
+  $$
+  BEGIN
+    INSERT INTO t (user, value) VALUES (NEW.user, NEW.value);
+    RETURN NEW;
+  END;
+  $$
+  LANGUAGE plpgsql;
+
+CREATE CONTINUOUS TRANSFORM ct AS
+  SELECT user::text, value::int FROM stream WHERE value > 100
+  THEN EXECUTE PROCEDURE insert_into_t();
