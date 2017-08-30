@@ -1,0 +1,6 @@
+{
+	"ApiBaseUrl":"http://artadv.cn:3000",
+	"jwtsecret":"meshsecret",
+	"jwtexpired":"1d",
+	"basePath":"/PlatformApi/v1"
+}
